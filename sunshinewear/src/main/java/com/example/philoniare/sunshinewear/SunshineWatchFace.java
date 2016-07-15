@@ -36,6 +36,7 @@ import android.view.WindowInsets;
 import android.widget.Toast;
 
 import java.lang.ref.WeakReference;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
@@ -59,6 +60,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
    */
   private static final int MSG_UPDATE_TIME = 0;
 
+  private static final String LOG_TAG = SunshineWatchFace.class.getSimpleName();
   @Override
   public Engine onCreateEngine() {
     return new Engine();
@@ -88,7 +90,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
     final Handler mUpdateTimeHandler = new EngineHandler(this);
     boolean mRegisteredTimeZoneReceiver = false;
     Paint mBackgroundPaint;
-    Paint mTextPaint;
+    Paint mTextPaintTime;
+    Paint mTextPaintDate;
     boolean mAmbient;
     Calendar mCalendar;
     final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
@@ -99,7 +102,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
       }
     };
     float mXOffset;
-    float mYOffset;
+    float mYOffsetTime;
+    float mYOffsetDate;
 
     /**
      * Whether the display supports fewer bits for each color in ambient mode. When true, we
@@ -118,14 +122,16 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
               .setAcceptsTapEvents(true)
               .build());
       Resources resources = SunshineWatchFace.this.getResources();
-      mYOffset = resources.getDimension(R.dimen.digital_y_offset);
+      mYOffsetTime = resources.getDimension(R.dimen.digital_y_offset_time);
+      mYOffsetDate = resources.getDimension(R.dimen.digital_y_offset_date);
 
       mBackgroundPaint = new Paint();
       mBackgroundPaint.setColor(resources.getColor(R.color.background));
 
-      mTextPaint = new Paint();
-      mTextPaint = createTextPaint(resources.getColor(R.color.digital_text));
-
+      mTextPaintTime = new Paint();
+      mTextPaintTime = createTextPaint(resources.getColor(R.color.digital_text_time));
+      mTextPaintDate = new Paint();
+      mTextPaintDate = createTextPaint(resources.getColor(R.color.digital_text_date));
       mCalendar = Calendar.getInstance();
     }
 
@@ -188,10 +194,12 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
       boolean isRound = insets.isRound();
       mXOffset = resources.getDimension(isRound
               ? R.dimen.digital_x_offset_round : R.dimen.digital_x_offset);
-      float textSize = resources.getDimension(isRound
-              ? R.dimen.digital_text_size_round : R.dimen.digital_text_size);
-
-      mTextPaint.setTextSize(textSize);
+      float textSizeTime = resources.getDimension(isRound
+              ? R.dimen.digital_text_size_time : R.dimen.digital_text_size_round_time);
+      float textSizeDate = resources.getDimension(isRound
+              ? R.dimen.digital_text_size_date : R.dimen.digital_text_size_round_date);
+      mTextPaintTime.setTextSize(textSizeTime);
+      mTextPaintDate.setTextSize(textSizeDate);
     }
 
     @Override
@@ -212,7 +220,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
       if (mAmbient != inAmbientMode) {
         mAmbient = inAmbientMode;
         if (mLowBitAmbient) {
-          mTextPaint.setAntiAlias(!inAmbientMode);
+          mTextPaintTime.setAntiAlias(!inAmbientMode);
+          mTextPaintDate.setAntiAlias(!inAmbientMode);
         }
         invalidate();
       }
@@ -258,12 +267,14 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
       long now = System.currentTimeMillis();
       mCalendar.setTimeInMillis(now);
 
-      String text = mAmbient
-              ? String.format("%d:%02d", mCalendar.get(Calendar.HOUR),
-              mCalendar.get(Calendar.MINUTE))
-              : String.format("%d:%02d:%02d", mCalendar.get(Calendar.HOUR),
-              mCalendar.get(Calendar.MINUTE), mCalendar.get(Calendar.SECOND));
-      canvas.drawText(text, mXOffset, mYOffset, mTextPaint);
+      // Set time and date
+      String textTime = String.format("%d:%02d", mCalendar.get(Calendar.HOUR),
+              mCalendar.get(Calendar.MINUTE));
+      String textDate= new SimpleDateFormat("EEE, MMM d yyyy").format(mCalendar.getTime());
+      canvas.drawText(textTime, mXOffset, mYOffsetTime, mTextPaintTime);
+      canvas.drawText(textDate, mXOffset, mYOffsetDate, mTextPaintDate);
+
+      // Fetch the weather
     }
 
     /**
