@@ -24,18 +24,29 @@ import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.IntDef;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
 import android.text.format.Time;
 import android.util.Log;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.util.Util;
 import com.example.android.sunshine.app.BuildConfig;
 import com.example.android.sunshine.app.MainActivity;
 import com.example.android.sunshine.app.R;
 import com.example.android.sunshine.app.Utility;
 import com.example.android.sunshine.app.data.WeatherContract;
 import com.example.android.sunshine.app.muzei.WeatherMuzeiSource;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.wearable.Asset;
+import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.PutDataMapRequest;
+import com.google.android.gms.wearable.PutDataRequest;
+import com.google.android.gms.wearable.Wearable;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -63,6 +74,17 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
     private static final long DAY_IN_MILLIS = 1000 * 60 * 60 * 24;
     private static final int WEATHER_NOTIFICATION_ID = 3004;
 
+    // Variables for updating the wearable
+    private GoogleApiClient mGoogleApiClient;
+    private static final String DATA_URI = "/sunshine-weather";
+    private static final String KEY_WEATHER_ASSET = "weather_temp_icon";
+    private static final String KEY_MIN_TEMP = "weather_temp_low";
+    private static final String KEY_MAX_TEMP = "weather_temp_high";
+    private static final String[] NOTIFY_WEARABLE_PROJECTION = new String[] {
+            WeatherContract.WeatherEntry.COLUMN_WEATHER_ID,
+            WeatherContract.WeatherEntry.COLUMN_MAX_TEMP,
+            WeatherContract.WeatherEntry.COLUMN_MIN_TEMP,
+    };
 
     private static final String[] NOTIFY_WEATHER_PROJECTION = new String[] {
             WeatherContract.WeatherEntry.COLUMN_WEATHER_ID,
@@ -89,6 +111,29 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
 
     public SunshineSyncAdapter(Context context, boolean autoInitialize) {
         super(context, autoInitialize);
+
+        // Initialize the API Client
+        mGoogleApiClient = new GoogleApiClient.Builder(getContext())
+                .addApi(Wearable.API)
+                .addConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
+                    @Override
+                    public void onConnected(@Nullable Bundle bundle) {
+                        Log.d(LOG_TAG, "Google API Client connected");
+                    }
+
+                    @Override
+                    public void onConnectionSuspended(int i) {
+
+                    }
+                })
+                .addOnConnectionFailedListener(new GoogleApiClient.OnConnectionFailedListener() {
+                    @Override
+                    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+
+                    }
+                })
+                .build();
+        mGoogleApiClient.connect();
     }
 
     @Override
@@ -347,6 +392,7 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                 updateWidgets();
                 updateMuzei();
                 notifyWeather();
+
             }
             Log.d(LOG_TAG, "Sync Complete. " + cVVector.size() + " Inserted");
             setLocationStatus(getContext(), LOCATION_STATUS_OK);
@@ -356,6 +402,34 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
             e.printStackTrace();
             setLocationStatus(getContext(), LOCATION_STATUS_SERVER_INVALID);
         }
+    }
+
+    private void updateWearable(double high, double low, int weatherId) {
+        // Send the update via a DataMap
+        PutDataMapRequest putDataRequest = PutDataMapRequest.create(DATA_URI);
+        putDataRequest.getDataMap().putDouble(KEY_MAX_TEMP, high);
+        putDataRequest.getDataMap().putDouble(KEY_MIN_TEMP, low);
+
+        // Send the image as an Asset
+        int weatherConditionIcon = Utility.getIconResourceForWeatherCondition(weatherId);
+        Bitmap bitmap = BitmapFactory.decodeResource(getContext().getResources(),
+                weatherConditionIcon);
+        Asset iconAsset = Utility.createAssetFromBitmap(bitmap);
+        putDataRequest.getDataMap().putAsset(KEY_WEATHER_ASSET, iconAsset);
+
+        PutDataRequest request = putDataRequest.asPutDataRequest();
+        Wearable.DataApi.putDataItem(mGoogleApiClient, request)
+                .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
+                    @Override
+                    public void onResult(@NonNull DataApi.DataItemResult dataItemResult) {
+                        if(dataItemResult.getStatus().isSuccess()) {
+                            Log.d(LOG_TAG, "Successfully sent the data");
+                        } else {
+                            Log.d(LOG_TAG, "Failure to sent the data");
+                        }
+                        mGoogleApiClient.disconnect();
+                    }
+                });
     }
 
     private void updateWidgets() {
@@ -472,6 +546,9 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                             (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
                     // WEATHER_NOTIFICATION_ID allows you to update the notification later on.
                     mNotificationManager.notify(WEATHER_NOTIFICATION_ID, mBuilder.build());
+
+                    // Notify the Wearable app about the update
+                    updateWearable(high, low, weatherId);
 
                     //refreshing last sync
                     SharedPreferences.Editor editor = prefs.edit();

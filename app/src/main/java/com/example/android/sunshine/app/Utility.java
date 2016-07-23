@@ -17,13 +17,17 @@ package com.example.android.sunshine.app;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.preference.PreferenceManager;
 import android.text.format.Time;
 
 import com.example.android.sunshine.app.sync.SunshineSyncAdapter;
+import com.google.android.gms.wearable.Asset;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -121,6 +125,30 @@ public class Utility {
                 day,
                 getFormattedMonthDay(context, dateInMillis)));
     }
+
+    /**
+     * Given a bitmap, returns the same image as an Asset.
+     *
+     * @param bitmap Bitmap to convert
+     * @return an Asset
+     */
+     public static Asset createAssetFromBitmap(Bitmap bitmap) {
+         ByteArrayOutputStream byteStream = null;
+         try {
+             byteStream = new ByteArrayOutputStream();
+             bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteStream);
+             return Asset.createFromBytes(byteStream.toByteArray());
+         } finally {
+             if (null != byteStream) {
+                 try {
+                     byteStream.close();
+                 } catch (IOException e) {
+                     e.printStackTrace();
+                 }
+             }
+         }
+     }
+
 
     /**
      * Given a day, returns just the name to use for that day.

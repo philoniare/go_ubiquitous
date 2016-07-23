@@ -1,5 +1,6 @@
 <resources>
-    <string name="app_name">SunshineWear</string>
     <string name="message">Watch face tapped</string>
-    <string name="my_digital_name">My Digital</string>
+    <string name="app_name">Sunshine</string>
+    <string name="my_digital_name">Sunshine</string>
+    <string name="info_not_available">Weather not Available</string>
 </resources>
